@@ -3,6 +3,8 @@
 # This module is part of GitPython and is released under the
 # 3-Clause BSD License: https://opensource.org/license/bsd-3-clause/
 
+from __future__ import annotations
+
 __all__ = ["DiffConstants", "NULL_TREE", "INDEX", "Diffable", "DiffIndex", "Diff"]
 
 import enum
@@ -20,14 +22,10 @@ from git.util import finalize_process, hex_to_bin
 from typing import (
     Any,
     Iterator,
-    List,
     Match,
-    Optional,
     Sequence,
-    Tuple,
     TYPE_CHECKING,
     TypeVar,
-    Union,
     cast,
 )
 from git.types import PathLike, Literal
@@ -103,7 +101,7 @@ def _octal_repl(matchobj: Match) -> bytes:
     return value
 
 
-def decode_path(path: bytes, has_ab_prefix: bool = True) -> Optional[bytes]:
+def decode_path(path: bytes, has_ab_prefix: bool = True) -> bytes | None:
     if path == b"/dev/null":
         return None
 
@@ -131,7 +129,7 @@ class Diffable:
 
     __slots__ = ()
 
-    repo: "Repo"
+    repo: Repo
     """Repository to operate on. Must be provided by subclass or sibling class."""
 
     NULL_TREE = NULL_TREE
@@ -172,8 +170,8 @@ class Diffable:
 
     def _process_diff_args(
         self,
-        args: List[Union[PathLike, "Diffable"]],
-    ) -> List[Union[PathLike, "Diffable"]]:
+        args: list[PathLike | Diffable],
+    ) -> list[PathLike | Diffable]:
         """
         :return:
             Possibly altered version of the given args list.
@@ -184,11 +182,11 @@ class Diffable:
 
     def diff(
         self,
-        other: Union[DiffConstants, "Tree", "Commit", str, None] = INDEX,
-        paths: Union[PathLike, List[PathLike], Tuple[PathLike, ...], None] = None,
+        other: DiffConstants | Tree | Commit | str | None = INDEX,
+        paths: PathLike | list[PathLike] | tuple[PathLike, ...] | None = None,
         create_patch: bool = False,
         **kwargs: Any,
-    ) -> "DiffIndex[Diff]":
+    ) -> DiffIndex[Diff]:
         """Create diffs between two items being trees, trees and index or an index and
         the working tree. Detects renames automatically.
 
@@ -228,7 +226,7 @@ class Diffable:
             an instance of :class:`~git.objects.tree.Tree` or
             :class:`~git.objects.commit.Commit`, or a git command error will occur.
         """
-        args: List[Union[PathLike, Diffable]] = []
+        args: list[PathLike | Diffable] = []
         args.append("--abbrev=40")  # We need full shas.
         args.append("--full-index")  # Get full index paths, not only filenames.
 
@@ -283,14 +281,14 @@ class Diffable:
 T_Diff = TypeVar("T_Diff", bound="Diff")
 
 
-class DiffIndex(List[T_Diff]):
+class DiffIndex(list[T_Diff]):
     R"""An index for diffs, allowing a list of :class:`Diff`\s to be queried by the diff
     properties.
 
     The class improves the diff handling convenience.
     """
 
-    change_type: Sequence[Literal["A", "C", "D", "R", "M", "T"]] = ("A", "C", "D", "R", "M", "T")  # noqa: F821
+    change_type: Sequence[Literal[A, C, D, R, M, T]] = ("A", "C", "D", "R", "M", "T")  # noqa: F821
     """Change type invariant identifying possible ways a blob can have changed:
 
     * ``A`` = Added
@@ -412,21 +410,21 @@ class Diff:
 
     def __init__(
         self,
-        repo: "Repo",
-        a_rawpath: Optional[bytes],
-        b_rawpath: Optional[bytes],
-        a_blob_id: Union[str, bytes, None],
-        b_blob_id: Union[str, bytes, None],
-        a_mode: Union[bytes, str, None],
-        b_mode: Union[bytes, str, None],
+        repo: Repo,
+        a_rawpath: bytes | None,
+        b_rawpath: bytes | None,
+        a_blob_id: str | bytes | None,
+        b_blob_id: str | bytes | None,
+        a_mode: bytes | str | None,
+        b_mode: bytes | str | None,
         new_file: bool,
         deleted_file: bool,
         copied_file: bool,
-        raw_rename_from: Optional[bytes],
-        raw_rename_to: Optional[bytes],
-        diff: Union[str, bytes, None],
-        change_type: Optional[Lit_change_type],
-        score: Optional[int],
+        raw_rename_from: bytes | None,
+        raw_rename_to: bytes | None,
+        diff: str | bytes | None,
+        change_type: Lit_change_type | None,
+        score: int | None,
     ) -> None:
         assert a_rawpath is None or isinstance(a_rawpath, bytes)
         assert b_rawpath is None or isinstance(b_rawpath, bytes)
@@ -445,13 +443,13 @@ class Diff:
                         repo = submodule.module()
                     break
 
-        self.a_blob: Union["IndexObject", None]
+        self.a_blob: IndexObject | None
         if a_blob_id is None or a_blob_id == self.NULL_HEX_SHA:
             self.a_blob = None
         else:
             self.a_blob = Blob(repo, hex_to_bin(a_blob_id), mode=self.a_mode, path=self.a_path)
 
-        self.b_blob: Union["IndexObject", None]
+        self.b_blob: IndexObject | None
         if b_blob_id is None or b_blob_id == self.NULL_HEX_SHA:
             self.b_blob = None
         else:
@@ -468,7 +466,7 @@ class Diff:
         self.raw_rename_to = raw_rename_to or None
 
         self.diff = diff
-        self.change_type: Union[Lit_change_type, None] = change_type
+        self.change_type: Lit_change_type | None = change_type
         self.score = score
 
     def __eq__(self, other: object) -> bool:
@@ -530,19 +528,19 @@ class Diff:
         return h + msg
 
     @property
-    def a_path(self) -> Optional[str]:
+    def a_path(self) -> str | None:
         return self.a_rawpath.decode(defenc, "replace") if self.a_rawpath else None
 
     @property
-    def b_path(self) -> Optional[str]:
+    def b_path(self) -> str | None:
         return self.b_rawpath.decode(defenc, "replace") if self.b_rawpath else None
 
     @property
-    def rename_from(self) -> Optional[str]:
+    def rename_from(self) -> str | None:
         return self.raw_rename_from.decode(defenc, "replace") if self.raw_rename_from else None
 
     @property
-    def rename_to(self) -> Optional[str]:
+    def rename_to(self) -> str | None:
         return self.raw_rename_to.decode(defenc, "replace") if self.raw_rename_to else None
 
     @property
@@ -569,7 +567,7 @@ class Diff:
         return self.rename_from != self.rename_to
 
     @classmethod
-    def _pick_best_path(cls, path_match: bytes, rename_match: bytes, path_fallback_match: bytes) -> Optional[bytes]:
+    def _pick_best_path(cls, path_match: bytes, rename_match: bytes, path_fallback_match: bytes) -> bytes | None:
         if path_match:
             return decode_path(path_match)
 
@@ -582,7 +580,7 @@ class Diff:
         return None
 
     @classmethod
-    def _index_from_patch_format(cls, repo: "Repo", proc: Union["Popen", "Git.AutoInterrupt"]) -> DiffIndex["Diff"]:
+    def _index_from_patch_format(cls, repo: Repo, proc: Popen | Git.AutoInterrupt) -> DiffIndex[Diff]:
         """Create a new :class:`DiffIndex` from the given process output which must be
         in patch format.
 
@@ -598,14 +596,14 @@ class Diff:
         """
 
         # FIXME: Here SLURPING raw, need to re-phrase header-regexes linewise.
-        text_list: List[bytes] = []
+        text_list: list[bytes] = []
         handle_process_output(proc, text_list.append, None, finalize_process, decode_streams=False)
 
         # For now, we have to bake the stream.
         text = b"".join(text_list)
-        index: "DiffIndex" = DiffIndex()
-        previous_header: Union[Match[bytes], None] = None
-        header: Union[Match[bytes], None] = None
+        index: DiffIndex = DiffIndex()
+        previous_header: Match[bytes] | None = None
+        header: Match[bytes] | None = None
         a_path, b_path = None, None  # For mypy.
         a_mode, b_mode = None, None  # For mypy.
         for _header in cls.re_header.finditer(text):
@@ -675,7 +673,7 @@ class Diff:
         return index
 
     @staticmethod
-    def _handle_diff_line(lines_bytes: bytes, repo: "Repo", index: DiffIndex["Diff"]) -> None:
+    def _handle_diff_line(lines_bytes: bytes, repo: Repo, index: DiffIndex[Diff]) -> None:
         lines = lines_bytes.decode(defenc)
 
         # Discard everything before the first colon, and the colon itself.
@@ -687,13 +685,13 @@ class Diff:
                 continue
             meta, _, path = line.partition("\x00")
             path = path.rstrip("\x00")
-            a_blob_id: Optional[str]
-            b_blob_id: Optional[str]
+            a_blob_id: str | None
+            b_blob_id: str | None
             old_mode, new_mode, a_blob_id, b_blob_id, _change_type = meta.split(None, 4)
             # Change type can be R100
             # R: status letter
             # 100: score (in case of copy and rename)
-            change_type: Lit_change_type = cast(Lit_change_type, _change_type[0])
+            change_type: Lit_change_type = cast("Lit_change_type", _change_type[0])
             score_str = "".join(_change_type[1:])
             score = int(score_str) if score_str.isdigit() else None
             path = path.strip("\n")
@@ -708,7 +706,7 @@ class Diff:
             # NOTE: We cannot conclude from the existence of a blob to change type,
             # as diffs with the working do not have blobs yet.
             if change_type == "D":
-                b_blob_id = None  # Optional[str]
+                b_blob_id: str | None = None
                 deleted_file = True
             elif change_type == "A":
                 a_blob_id = None
@@ -748,7 +746,7 @@ class Diff:
             index.append(diff)
 
     @classmethod
-    def _index_from_raw_format(cls, repo: "Repo", proc: "Popen") -> "DiffIndex[Diff]":
+    def _index_from_raw_format(cls, repo: Repo, proc: Popen) -> DiffIndex[Diff]:
         """Create a new :class:`DiffIndex` from the given process output which must be
         in raw format.
 
@@ -764,7 +762,7 @@ class Diff:
         # handles
         # :100644 100644 687099101... 37c5e30c8... M    .gitignore
 
-        index: "DiffIndex" = DiffIndex()
+        index: DiffIndex = DiffIndex()
         handle_process_output(
             proc,
             lambda byt: cls._handle_diff_line(byt, repo, index),
