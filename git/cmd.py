@@ -49,6 +49,7 @@ from typing import (
     Mapping,
     Sequence,
     TYPE_CHECKING,
+    TypeVar,
     TextIO,
     cast,
     overload,
@@ -58,6 +59,11 @@ if sys.version_info >= (3, 10):
     from typing import TypeAlias
 else:
     from typing_extensions import TypeAlias
+
+if sys.version_info >= (3, 11):
+    from typing import assert_never, assert_type
+else:
+    from typing_extensions import assert_never, assert_type
 
 
 if TYPE_CHECKING:
@@ -95,11 +101,8 @@ _logger = logging.getLogger(__name__)
 
 def handle_process_output(
     process: Git.AutoInterrupt | Popen,
-    stdout_handler: None
-    | Callable[[bytes | str], None]
-    | Callable[[list[bytes | str]], None]
-    | Callable[[bytes, Repo, DiffIndex], None],
-    stderr_handler: None | Callable[[bytes | str], None] | Callable[[list[bytes | str]], None],
+    stdout_handler: Callable[[bytes | str], None] | Callable[[list[bytes | str]], None] | Callable[[bytes, Repo, DiffIndex], None] | Callable[[bytes, Repo, DiffIndex], None] | None,
+    stderr_handler: Callable[[bytes | str], None] | Callable[[list[bytes | str]], None] | Callable[[bytes, Repo, DiffIndex], None] | None,
     finalizer: None | Callable[[Popen | Git.AutoInterrupt], None] = None,
     decode_streams: bool = True,
     kill_after_timeout: None | float = None,
@@ -169,7 +172,7 @@ def handle_process_output(
         p_stdout = process.proc.stdout if process.proc else None
         p_stderr = process.proc.stderr if process.proc else None
     else:
-        process = cast("Popen", process)  # type: ignore[redundant-cast]
+        process = assert_type(process, "Popen")
         cmdline = getattr(process, "args", "")
         p_stdout = process.stdout
         p_stderr = process.stderr
@@ -203,16 +206,15 @@ def handle_process_output(
                     f" kill_after_timeout={kill_after_timeout} seconds"
                 )
             if stderr_handler:
-                error_str: str | bytes = (
+                error_str: str = (
                     f"error: process killed because it timed out. kill_after_timeout={kill_after_timeout} seconds"
                 )
                 if not decode_streams and isinstance(p_stderr, BinaryIO):
                     # Assume stderr_handler needs binary input.
-                    error_str = cast("str", error_str)
-                    error_str = error_str.encode()
-                # We ignore typing on the next line because mypy does not like the way
-                # we inferred that stderr takes str or bytes.
-                stderr_handler(error_str)  # type: ignore[arg-type]
+                    error_str = assert_type(error_str, str)
+                    stderr_handler(error_str.encode())
+                else:
+                    stderr_handler(error_str)
 
     if finalizer:
         finalizer(process)
@@ -375,7 +377,7 @@ class _AutoInterrupt:
         return getattr(self.proc, attr)
 
     # TODO: Bad choice to mimic `proc.wait()` but with different args.
-    def wait(self, stderr: None | str | bytes = b"") -> int:
+    def wait(self, stderr: None | bytes | str = b"") -> int:
         """Wait for the process and return its status code.
 
         :param stderr:
@@ -1106,7 +1108,7 @@ class Git(metaclass=_GitMeta):
         max_chunk_size: int = io.DEFAULT_BUFFER_SIZE,
         strip_newline_in_stdout: bool = True,
         **subprocess_kwargs: Any,
-    ) -> str | bytes | tuple[int, str | bytes, str] | AutoInterrupt:
+    ) -> bytes | str | tuple[int, bytes | str, str] | AutoInterrupt:
         R"""Handle executing the command, and consume and return the returned
         information (stdout).
 
@@ -1349,8 +1351,8 @@ class Git(metaclass=_GitMeta):
 
         # Wait for the process to return.
         status = 0
-        stdout_value: str | bytes = b""
-        stderr_value: str | bytes = b""
+        stdout_value: bytes | str = b""
+        stderr_value: bytes | str = b""
         newline = "\n" if universal_newlines else b"\n"
         try:
             if output_stream is None:
@@ -1535,11 +1537,11 @@ class Git(metaclass=_GitMeta):
     @overload
     def _call_process(
         self, method: str, *args: Any, **kwargs: Any
-    ) -> str | bytes | tuple[int, str | bytes, str] | Git.AutoInterrupt: ...
+    ) -> bytes | str | tuple[int, bytes | str, str] | Git.AutoInterrupt: ...
 
     def _call_process(
         self, method: str, *args: Any, **kwargs: Any
-    ) -> str | bytes | tuple[int, str | bytes, str] | Git.AutoInterrupt:
+    ) -> bytes | str | tuple[int, bytes | str, str] | Git.AutoInterrupt:
         """Run the given git command with the specified arguments and return the result
         as a string.
 
@@ -1652,7 +1654,7 @@ class Git(metaclass=_GitMeta):
             # Assume 40 bytes hexsha - bin-to-ascii for some reason returns bytes, not text.
             refstr: str = ref.decode("ascii")
         elif not isinstance(ref, str):
-            refstr = str(ref)  # Could be ref-object.
+            assert_never(ref)
         else:
             refstr = ref
 

@@ -19,6 +19,7 @@ from git.util import finalize_process, hex_to_bin
 
 # typing ------------------------------------------------------------------
 
+import typing
 from typing import (
     Any,
     Iterator,
@@ -597,7 +598,12 @@ class Diff:
 
         # FIXME: Here SLURPING raw, need to re-phrase header-regexes linewise.
         text_list: list[bytes] = []
-        handle_process_output(proc, text_list.append, None, finalize_process, decode_streams=False)
+
+        def append_bytes_handler(avar: bytes | str) -> None:
+            typing.cast(bytes, avar)
+            return text_list.append(avar)
+
+        handle_process_output(proc, append_bytes_handler, None, finalize_process, decode_streams=False)
 
         # For now, we have to bake the stream.
         text = b"".join(text_list)

@@ -3,7 +3,7 @@
 # This module is part of GitPython and is released under the
 # 3-Clause BSD License: https://opensource.org/license/bsd-3-clause/
 
-import sys
+from __future__ import annotations
 
 __all__ = [
     "stream_copy",
@@ -42,6 +42,7 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import time
 from urllib.parse import urlsplit, urlunsplit
 import warnings
@@ -67,7 +68,6 @@ from gitdb.util import (
 
 from typing import (
     Any,
-    AnyStr,
     BinaryIO,
     Callable,
     Dict,
@@ -169,7 +169,7 @@ def unbare_repo(func: Callable[..., T]) -> Callable[..., T]:
     from .exc import InvalidGitRepositoryError
 
     @wraps(func)
-    def wrapper(self: "Remote", *args: Any, **kwargs: Any) -> T:
+    def wrapper(self: Remote, *args: Any, **kwargs: Any) -> T:
         if self.repo.bare:
             raise InvalidGitRepositoryError("Method '%s' cannot operate on bare repositories" % func.__name__)
         # END bare method
@@ -344,7 +344,7 @@ def _get_exe_extensions() -> Sequence[str]:
         return ()
 
 
-def py_where(program: str, path: Optional[PathLike] = None) -> List[str]:
+def py_where(program: str, path: PathLike | None = None) -> list[str]:
     """Perform a path search to assist :func:`is_cygwin_git`.
 
     This is not robust for general use. It is an implementation detail of
@@ -382,7 +382,7 @@ def py_where(program: str, path: Optional[PathLike] = None) -> List[str]:
     return progs
 
 
-def _cygexpath(drive: Optional[str], path: str) -> str:
+def _cygexpath(drive: str | None, path: str) -> str:
     if osp.isabs(path) and not drive:
         # Invoked from `cygpath()` directly with `D:Apps\123`?
         #  It's an error, leave it alone just slashes)
@@ -401,7 +401,7 @@ def _cygexpath(drive: Optional[str], path: str) -> str:
     return p_str.replace("\\", "/")
 
 
-_cygpath_parsers: Tuple[Tuple[Pattern[str], Callable, bool], ...] = (
+_cygpath_parsers: tuple[tuple[Pattern[str], Callable, bool], ...] = (
     # See: https://msdn.microsoft.com/en-us/library/windows/desktop/aa365247(v=vs.85).aspx
     # and: https://www.cygwin.com/cygwin-ug-net/using.html#unc-paths
     (
@@ -449,7 +449,7 @@ def decygpath(path: PathLike) -> str:
 
 #: Store boolean flags denoting if a specific Git executable
 #: is from a Cygwin installation (since `cache_lru()` unsupported on PY2).
-_is_cygwin_cache: Dict[str, Optional[bool]] = {}
+_is_cygwin_cache: dict[str, bool | None] = {}
 
 
 def _is_cygwin_git(git_executable: str) -> bool:
@@ -489,7 +489,7 @@ def is_cygwin_git(git_executable: None) -> Literal[False]: ...
 def is_cygwin_git(git_executable: PathLike) -> bool: ...
 
 
-def is_cygwin_git(git_executable: Union[None, PathLike]) -> bool:
+def is_cygwin_git(git_executable: None | PathLike) -> bool:
     # TODO: when py3.7 support is dropped, use the new interpolation f"{variable=}"
     _logger.debug(f"sys.platform={sys.platform!r}, git_executable={git_executable!r}")
     if sys.platform != "cygwin":
@@ -505,7 +505,7 @@ def get_user_id() -> str:
     return "%s@%s" % (getpass.getuser(), platform.node())
 
 
-def finalize_process(proc: Union[subprocess.Popen, "Git.AutoInterrupt"], **kwargs: Any) -> None:
+def finalize_process(proc: subprocess.Popen | Git.AutoInterrupt, **kwargs: Any) -> None:
     """Wait for the process (clone, fetch, pull or push) and handle its errors
     accordingly."""
     # TODO: No close proc-streams??
@@ -522,7 +522,7 @@ def expand_path(p: PathLike, expand_vars: bool = ...) -> str:
     ...
 
 
-def expand_path(p: Union[None, PathLike], expand_vars: bool = True) -> Optional[PathLike]:
+def expand_path(p: None | PathLike, expand_vars: bool = True) -> PathLike | None:
     if isinstance(p, Path):
         return p.resolve()
     try:
@@ -534,7 +534,7 @@ def expand_path(p: Union[None, PathLike], expand_vars: bool = True) -> Optional[
         return None
 
 
-def remove_password_if_present(cmdline: Sequence[str]) -> List[str]:
+def remove_password_if_present(cmdline: Sequence[str]) -> list[str]:
     """Parse any command line argument and if one of the elements is an URL with a
     username and/or password, replace them by stars (in-place).
 
@@ -601,12 +601,12 @@ class RemoteProgress:
     re_op_relative = re.compile(r"(remote: )?([\w\s]+):\s+(\d+)% \((\d+)/(\d+)\)(.*)")
 
     def __init__(self) -> None:
-        self._seen_ops: List[int] = []
-        self._cur_line: Optional[str] = None
-        self.error_lines: List[str] = []
-        self.other_lines: List[str] = []
+        self._seen_ops: list[int] = []
+        self._cur_line: str | None = None
+        self.error_lines: list[str] = []
+        self.other_lines: list[str] = []
 
-    def _parse_progress_line(self, line: AnyStr) -> None:
+    def _parse_progress_line(self, line: bytes | str) -> None:
         """Parse progress information from the given line as retrieved by
         :manpage:`git-push(1)` or :manpage:`git-fetch(1)`.
 
@@ -695,14 +695,14 @@ class RemoteProgress:
             message,
         )
 
-    def new_message_handler(self) -> Callable[[str], None]:
+    def new_message_handler(self) -> Callable[[bytes | str], None]:
         """
         :return:
             A progress handler suitable for :func:`~git.cmd.handle_process_output`,
             passing lines on to this progress handler in a suitable format.
         """
 
-        def handler(line: AnyStr) -> None:
+        def handler(line: bytes | str) -> None:
             return self._parse_progress_line(line.rstrip())
 
         # END handler
@@ -716,8 +716,8 @@ class RemoteProgress:
     def update(
         self,
         op_code: int,
-        cur_count: Union[str, float],
-        max_count: Union[str, float, None] = None,
+        cur_count: str | float,
+        max_count: str | float | None = None,
         message: str = "",
     ) -> None:
         """Called whenever the progress changes.
@@ -794,7 +794,7 @@ class Actor:
 
     __slots__ = ("name", "email")
 
-    def __init__(self, name: Optional[str], email: Optional[str]) -> None:
+    def __init__(self, name: str | None, email: str | None) -> None:
         self.name = name
         self.email = email
 
@@ -814,7 +814,7 @@ class Actor:
         return '<git.Actor "%s <%s>">' % (self.name, self.email)
 
     @classmethod
-    def _from_string(cls, string: str) -> "Actor":
+    def _from_string(cls, string: str) -> Actor:
         """Create an :class:`Actor` from a string.
 
         :param string:
@@ -843,8 +843,8 @@ class Actor:
         cls,
         env_name: str,
         env_email: str,
-        config_reader: Union[None, "GitConfigParser", "SectionConstraint"] = None,
-    ) -> "Actor":
+        config_reader: None | GitConfigParser | SectionConstraint = None,
+    ) -> Actor:
         actor = Actor("", "")
         user_id = None  # We use this to avoid multiple calls to getpass.getuser().
 
@@ -879,7 +879,7 @@ class Actor:
         return actor
 
     @classmethod
-    def committer(cls, config_reader: Union[None, "GitConfigParser", "SectionConstraint"] = None) -> "Actor":
+    def committer(cls, config_reader: None | GitConfigParser | SectionConstraint = None) -> Actor:
         """
         :return:
             :class:`Actor` instance corresponding to the configured committer. It
@@ -894,7 +894,7 @@ class Actor:
         return cls._main_actor(cls.env_committer_name, cls.env_committer_email, config_reader)
 
     @classmethod
-    def author(cls, config_reader: Union[None, "GitConfigParser", "SectionConstraint"] = None) -> "Actor":
+    def author(cls, config_reader: None | GitConfigParser | SectionConstraint = None) -> Actor:
         """Same as :meth:`committer`, but defines the main author. It may be specified
         in the environment, but defaults to the committer."""
         return cls._main_actor(cls.env_author_name, cls.env_author_email, config_reader)
@@ -929,12 +929,12 @@ class Stats:
 
     __slots__ = ("total", "files")
 
-    def __init__(self, total: Total_TD, files: Dict[PathLike, Files_TD]) -> None:
+    def __init__(self, total: Total_TD, files: dict[PathLike, Files_TD]) -> None:
         self.total = total
         self.files = files
 
     @classmethod
-    def _list_from_string(cls, repo: "Repo", text: str) -> "Stats":
+    def _list_from_string(cls, repo: Repo, text: str) -> Stats:
         """Create a :class:`Stats` object from output retrieved by
         :manpage:`git-diff(1)`.
 
@@ -981,7 +981,7 @@ class IndexFileSHA1Writer:
         self.f = f
         self.sha1 = make_sha(b"")
 
-    def write(self, data: AnyStr) -> int:
+    def write(self, data: bytes | str) -> int:
         self.sha1.update(data)
         return self.f.write(data)
 
@@ -1174,7 +1174,7 @@ class IterableList(List[T_IterableObj]):  # type: ignore[type-var]
 
     __slots__ = ("_id_attr", "_prefix")
 
-    def __new__(cls, id_attr: str, prefix: str = "") -> "IterableList[T_IterableObj]":
+    def __new__(cls, id_attr: str, prefix: str = "") -> IterableList[T_IterableObj]:
         return super().__new__(cls)
 
     def __init__(self, id_attr: str, prefix: str = "") -> None:
@@ -1193,7 +1193,7 @@ class IterableList(List[T_IterableObj]):  # type: ignore[type-var]
 
         # Otherwise make a full name search.
         try:
-            getattr(self, cast(str, attr))  # Use cast to silence mypy.
+            getattr(self, cast("str", attr))  # Use cast to silence mypy.
             return True
         except (AttributeError, TypeError):
             return False
@@ -1207,20 +1207,20 @@ class IterableList(List[T_IterableObj]):  # type: ignore[type-var]
         # END for each item
         return list.__getattribute__(self, attr)
 
-    def __getitem__(self, index: Union[SupportsIndex, int, slice, str]) -> T_IterableObj:  # type: ignore[override]
+    def __getitem__(self, index: SupportsIndex | int | slice | str) -> T_IterableObj:  # type: ignore[override]
         if isinstance(index, int):
             return list.__getitem__(self, index)
         elif isinstance(index, slice):
             raise ValueError("Index should be an int or str")
         else:
             try:
-                return getattr(self, cast(str, index))
+                return getattr(self, cast("str", index))
             except AttributeError as e:
                 raise IndexError(f"No item found with id {self._prefix}{index}") from e
         # END handle getattr
 
-    def __delitem__(self, index: Union[SupportsIndex, int, slice, str]) -> None:
-        delindex = cast(int, index)
+    def __delitem__(self, index: SupportsIndex | int | slice | str) -> None:
+        delindex = cast("int", index)
         if isinstance(index, str):
             delindex = -1
             name = self._prefix + index
@@ -1258,7 +1258,7 @@ class IterableObj(Protocol):
 
     @classmethod
     @abstractmethod
-    def iter_items(cls, repo: "Repo", *args: Any, **kwargs: Any) -> Iterator[T_IterableObj]:
+    def iter_items(cls, repo: Repo, *args: Any, **kwargs: Any) -> Iterator[T_IterableObj]:
         # Return-typed to be compatible with subtypes e.g. Remote.
         """Find (all) items of this type.
 
@@ -1272,7 +1272,7 @@ class IterableObj(Protocol):
         raise NotImplementedError("To be implemented by Subclass")
 
     @classmethod
-    def list_items(cls, repo: "Repo", *args: Any, **kwargs: Any) -> IterableList[T_IterableObj]:
+    def list_items(cls, repo: Repo, *args: Any, **kwargs: Any) -> IterableList[T_IterableObj]:
         """Find (all) items of this type and collect them into a list.
 
         For more information about the arguments, see :meth:`iter_items`.
@@ -1294,7 +1294,7 @@ class IterableClassWatcher(type):
     """Metaclass that issues :exc:`DeprecationWarning` when :class:`git.util.Iterable`
     is subclassed."""
 
-    def __init__(cls, name: str, bases: Tuple, clsdict: Dict) -> None:
+    def __init__(cls, name: str, bases: tuple, clsdict: dict) -> None:
         for base in bases:
             if type(base) is IterableClassWatcher:
                 warnings.warn(
@@ -1319,7 +1319,7 @@ class Iterable(metaclass=IterableClassWatcher):
     _id_attribute_ = "attribute that most suitably identifies your instance"
 
     @classmethod
-    def iter_items(cls, repo: "Repo", *args: Any, **kwargs: Any) -> Any:
+    def iter_items(cls, repo: Repo, *args: Any, **kwargs: Any) -> Any:
         """Deprecated, use :class:`IterableObj` instead.
 
         Find (all) items of this type.
@@ -1332,7 +1332,7 @@ class Iterable(metaclass=IterableClassWatcher):
         raise NotImplementedError("To be implemented by Subclass")
 
     @classmethod
-    def list_items(cls, repo: "Repo", *args: Any, **kwargs: Any) -> Any:
+    def list_items(cls, repo: Repo, *args: Any, **kwargs: Any) -> Any:
         """Deprecated, use :class:`IterableObj` instead.
 
         Find (all) items of this type and collect them into a list.

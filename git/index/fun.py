@@ -4,6 +4,8 @@
 """Standalone functions to accompany the index implementation and make it more
 versatile."""
 
+from __future__ import annotations
+
 __all__ = [
     "write_cache",
     "read_cache",
@@ -103,12 +105,13 @@ def run_commit_hook(name: str, index: "IndexFile", *args: str) -> None:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=index.repo.working_dir,
+            universal_newlines=True,
         )
     except Exception as ex:
         raise HookExecutionError(hp, ex) from ex
     else:
-        stdout_list: List[str] = []
-        stderr_list: List[str] = []
+        stdout_list: List[bytes | str] = []
+        stderr_list: List[bytes | str] = []
         handle_process_output(process, stdout_list.append, stderr_list.append, finalize_process)
         stdout = "".join(stdout_list)
         stderr = "".join(stderr_list)
