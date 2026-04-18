@@ -42,20 +42,14 @@ from git.util import (
 
 from typing import (
     Any,
-    AnyStr,
     BinaryIO,
     Callable,
-    Dict,
     IO,
     Iterator,
-    List,
     Mapping,
-    Optional,
     Sequence,
     TYPE_CHECKING,
     TextIO,
-    Tuple,
-    Union,
     cast,
     overload,
 )
@@ -65,9 +59,9 @@ if sys.version_info >= (3, 10):
 else:
     from typing_extensions import TypeAlias
 
-from git.types import Literal, PathLike, TBD
 
 if TYPE_CHECKING:
+    from git.types import Literal, PathLike, TBD
     from git.diff import DiffIndex
     from git.repo.base import Repo
 
@@ -100,17 +94,15 @@ _logger = logging.getLogger(__name__)
 
 
 def handle_process_output(
-    process: "Git.AutoInterrupt" | Popen,
-    stdout_handler: Union[
-        None,
-        Callable[[AnyStr], None],
-        Callable[[List[AnyStr]], None],
-        Callable[[bytes, "Repo", "DiffIndex"], None],
-    ],
-    stderr_handler: Union[None, Callable[[AnyStr], None], Callable[[List[AnyStr]], None]],
-    finalizer: Union[None, Callable[[Union[Popen, "Git.AutoInterrupt"]], None]] = None,
+    process: Git.AutoInterrupt | Popen,
+    stdout_handler: None
+    | Callable[[bytes | str], None]
+    | Callable[[list[bytes | str]], None]
+    | Callable[[bytes, Repo, DiffIndex], None],
+    stderr_handler: None | Callable[[bytes | str], None] | Callable[[list[bytes | str]], None],
+    finalizer: None | Callable[[Popen | Git.AutoInterrupt], None] = None,
     decode_streams: bool = True,
-    kill_after_timeout: Union[None, float] = None,
+    kill_after_timeout: None | float = None,
 ) -> None:
     R"""Register for notifications to learn that process output is ready to read, and
     dispatch lines to the respective line handlers.
@@ -147,11 +139,11 @@ def handle_process_output(
 
     # Use 2 "pump" threads and wait for both to finish.
     def pump_stream(
-        cmdline: List[str],
+        cmdline: list[str],
         name: str,
-        stream: Union[BinaryIO, TextIO],
+        stream: BinaryIO | TextIO,
         is_decode: bool,
-        handler: Union[None, Callable[[Union[bytes, str]], None]],
+        handler: None | Callable[[bytes | str], None],
     ) -> None:
         try:
             for line in stream:
@@ -173,11 +165,11 @@ def handle_process_output(
 
     if hasattr(process, "proc"):
         process = cast("Git.AutoInterrupt", process)
-        cmdline: str | Tuple[str, ...] | List[str] = getattr(process.proc, "args", "")
+        cmdline: str | tuple[str, ...] | list[str] = getattr(process.proc, "args", "")
         p_stdout = process.proc.stdout if process.proc else None
         p_stderr = process.proc.stderr if process.proc else None
     else:
-        process = cast(Popen, process)  # type: ignore[redundant-cast]
+        process = cast("Popen", process)  # type: ignore[redundant-cast]
         cmdline = getattr(process, "args", "")
         p_stdout = process.stdout
         p_stderr = process.stderr
@@ -185,13 +177,13 @@ def handle_process_output(
     if not isinstance(cmdline, (tuple, list)):
         cmdline = cmdline.split()
 
-    pumps: List[Tuple[str, IO, Callable[..., None] | None]] = []
+    pumps: list[tuple[str, IO, Callable[..., None] | None]] = []
     if p_stdout:
         pumps.append(("stdout", p_stdout, stdout_handler))
     if p_stderr:
         pumps.append(("stderr", p_stderr, stderr_handler))
 
-    threads: List[threading.Thread] = []
+    threads: list[threading.Thread] = []
 
     for name, stream, handler in pumps:
         t = threading.Thread(target=pump_stream, args=(cmdline, name, stream, decode_streams, handler))
@@ -211,12 +203,12 @@ def handle_process_output(
                     f" kill_after_timeout={kill_after_timeout} seconds"
                 )
             if stderr_handler:
-                error_str: Union[str, bytes] = (
+                error_str: str | bytes = (
                     f"error: process killed because it timed out. kill_after_timeout={kill_after_timeout} seconds"
                 )
                 if not decode_streams and isinstance(p_stderr, BinaryIO):
                     # Assume stderr_handler needs binary input.
-                    error_str = cast(str, error_str)
+                    error_str = cast("str", error_str)
                     error_str = error_str.encode()
                 # We ignore typing on the next line because mypy does not like the way
                 # we inferred that stderr takes str or bytes.
@@ -231,10 +223,10 @@ safer_popen: Callable[..., Popen]
 if sys.platform == "win32":
 
     def _safer_popen_windows(
-        command: Union[str, Sequence[Any]],
+        command: str | Sequence[Any],
         *,
         shell: bool = False,
-        env: Optional[Mapping[str, str]] = None,
+        env: Mapping[str, str] | None = None,
         **kwargs: Any,
     ) -> Popen:
         """Call :class:`subprocess.Popen` on Windows but don't include a CWD in the
@@ -300,7 +292,7 @@ def dashify(string: str) -> str:
     return string.replace("_", "-")
 
 
-def slots_to_dict(self: "Git", exclude: Sequence[str] = ()) -> Dict[str, Any]:
+def slots_to_dict(self: Git, exclude: Sequence[str] = ()) -> dict[str, Any]:
     return {s: getattr(self, s) for s in self.__slots__ if s not in exclude}
 
 
@@ -332,10 +324,10 @@ class _AutoInterrupt:
     # to prevent race conditions in testing.
     _status_code_if_terminate: int = 0
 
-    def __init__(self, proc: Union[None, subprocess.Popen], args: Any) -> None:
+    def __init__(self, proc: None | subprocess.Popen, args: Any) -> None:
         self.proc = proc
         self.args = args
-        self.status: Union[int, None] = None
+        self.status: int | None = None
 
     def _terminate(self) -> None:
         """Terminate the underlying process."""
@@ -383,7 +375,7 @@ class _AutoInterrupt:
         return getattr(self.proc, attr)
 
     # TODO: Bad choice to mimic `proc.wait()` but with different args.
-    def wait(self, stderr: Union[None, str, bytes] = b"") -> int:
+    def wait(self, stderr: None | str | bytes = b"") -> int:
         """Wait for the process and return its status code.
 
         :param stderr:
@@ -398,7 +390,7 @@ class _AutoInterrupt:
         if stderr is None:
             stderr_b = b""
         stderr_b = force_bytes(data=stderr, encoding="utf-8")
-        status: Union[int, None]
+        status: int | None
         if self.proc is not None:
             status = self.proc.wait()
             p_stderr = self.proc.stderr
@@ -406,7 +398,7 @@ class _AutoInterrupt:
             status = self.status
             p_stderr = None
 
-        def read_all_from_possibly_closed_stream(stream: Union[IO[bytes], None]) -> bytes:
+        def read_all_from_possibly_closed_stream(stream: IO[bytes] | None) -> bytes:
             if stream:
                 try:
                     return stderr_b + force_bytes(stream.read())
@@ -495,7 +487,7 @@ class _CatFileContentStream:
 
         return data
 
-    def readlines(self, size: int = -1) -> List[bytes]:
+    def readlines(self, size: int = -1) -> list[bytes]:
         if self._nbr == self._size:
             return []
 
@@ -516,7 +508,7 @@ class _CatFileContentStream:
         return out
 
     # skipcq: PYL-E0301
-    def __iter__(self) -> "Git.CatFileContentStream":
+    def __iter__(self) -> Git.CatFileContentStream:
         return self
 
     def __next__(self) -> bytes:
@@ -649,10 +641,10 @@ class Git(metaclass=_GitMeta):
 
     re_unsafe_protocol = re.compile(r"(.+)::.+")
 
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         return slots_to_dict(self, exclude=self._excluded_)
 
-    def __setstate__(self, d: Dict[str, Any]) -> None:
+    def __setstate__(self, d: dict[str, Any]) -> None:
         dict_to_slots_and__excluded_are_none(self, d, excluded=self._excluded_)
 
     # CONFIGURATION
@@ -727,7 +719,7 @@ class Git(metaclass=_GitMeta):
     _refresh_token = object()  # Since None would match an initial _version_info_token.
 
     @classmethod
-    def refresh(cls, path: Union[None, PathLike] = None) -> bool:
+    def refresh(cls, path: None | PathLike = None) -> bool:
         """Update information about the git executable :class:`Git` objects will use.
 
         Called by the :func:`git.refresh` function in the top level ``__init__``.
@@ -902,10 +894,10 @@ class Git(metaclass=_GitMeta):
 
     @overload
     @classmethod
-    def polish_url(cls, url: str, is_cygwin: Union[None, bool] = None) -> str: ...
+    def polish_url(cls, url: str, is_cygwin: None | bool = None) -> str: ...
 
     @classmethod
-    def polish_url(cls, url: str, is_cygwin: Union[None, bool] = None) -> PathLike:
+    def polish_url(cls, url: str, is_cygwin: None | bool = None) -> PathLike:
         """Remove any backslashes from URLs to be written in config files.
 
         Windows might create config files containing paths with backslashes, but git
@@ -945,7 +937,7 @@ class Git(metaclass=_GitMeta):
             )
 
     @classmethod
-    def check_unsafe_options(cls, options: List[str], unsafe_options: List[str]) -> None:
+    def check_unsafe_options(cls, options: list[str], unsafe_options: list[str]) -> None:
         """Check for unsafe options.
 
         Some options that are passed to ``git <command>`` can be used to execute
@@ -965,7 +957,7 @@ class Git(metaclass=_GitMeta):
 
     CatFileContentStream: TypeAlias = _CatFileContentStream
 
-    def __init__(self, working_dir: Union[None, PathLike] = None) -> None:
+    def __init__(self, working_dir: None | PathLike = None) -> None:
         """Initialize this instance with:
 
         :param working_dir:
@@ -976,19 +968,19 @@ class Git(metaclass=_GitMeta):
         """
         super().__init__()
         self._working_dir = expand_path(working_dir)
-        self._git_options: Union[List[str], Tuple[str, ...]] = ()
-        self._persistent_git_options: List[str] = []
+        self._git_options: list[str] | tuple[str, ...] = ()
+        self._persistent_git_options: list[str] = []
 
         # Extra environment variables to pass to git commands
-        self._environment: Dict[str, str] = {}
+        self._environment: dict[str, str] = {}
 
         # Cached version slots
-        self._version_info: Union[Tuple[int, ...], None] = None
+        self._version_info: tuple[int, ...] | None = None
         self._version_info_token: object = None
 
         # Cached command slots
-        self.cat_file_header: Union[None, TBD] = None
-        self.cat_file_all: Union[None, TBD] = None
+        self.cat_file_header: None | TBD = None
+        self.cat_file_all: None | TBD = None
 
     def __getattribute__(self, name: str) -> Any:
         if name == "USE_SHELL":
@@ -1019,12 +1011,12 @@ class Git(metaclass=_GitMeta):
         self._persistent_git_options = self.transform_kwargs(split_single_char_options=True, **kwargs)
 
     @property
-    def working_dir(self) -> Union[None, PathLike]:
+    def working_dir(self) -> None | PathLike:
         """:return: Git directory we are working on"""
         return self._working_dir
 
     @property
-    def version_info(self) -> Tuple[int, ...]:
+    def version_info(self) -> tuple[int, ...]:
         """
         :return: Tuple with integers representing the major, minor and additional
             version numbers as parsed from :manpage:`git-version(1)`. Up to four fields
@@ -1054,33 +1046,33 @@ class Git(metaclass=_GitMeta):
     @overload
     def execute(
         self,
-        command: Union[str, Sequence[Any]],
+        command: str | Sequence[Any],
         *,
         as_process: Literal[True],
-    ) -> "AutoInterrupt": ...
+    ) -> AutoInterrupt: ...
 
     @overload
     def execute(
         self,
-        command: Union[str, Sequence[Any]],
+        command: str | Sequence[Any],
         *,
         as_process: Literal[False] = False,
         stdout_as_string: Literal[True],
-    ) -> Union[str, Tuple[int, str, str]]: ...
+    ) -> str | tuple[int, str, str]: ...
 
     @overload
     def execute(
         self,
-        command: Union[str, Sequence[Any]],
+        command: str | Sequence[Any],
         *,
         as_process: Literal[False] = False,
         stdout_as_string: Literal[False] = False,
-    ) -> Union[bytes, Tuple[int, bytes, str]]: ...
+    ) -> bytes | tuple[int, bytes, str]: ...
 
     @overload
     def execute(
         self,
-        command: Union[str, Sequence[Any]],
+        command: str | Sequence[Any],
         *,
         with_extended_output: Literal[False],
         as_process: Literal[False],
@@ -1090,7 +1082,7 @@ class Git(metaclass=_GitMeta):
     @overload
     def execute(
         self,
-        command: Union[str, Sequence[Any]],
+        command: str | Sequence[Any],
         *,
         with_extended_output: Literal[False],
         as_process: Literal[False],
@@ -1099,22 +1091,22 @@ class Git(metaclass=_GitMeta):
 
     def execute(
         self,
-        command: Union[str, Sequence[Any]],
-        istream: Union[None, BinaryIO] = None,
+        command: str | Sequence[Any],
+        istream: None | BinaryIO = None,
         with_extended_output: bool = False,
         with_exceptions: bool = True,
         as_process: bool = False,
-        output_stream: Union[None, BinaryIO] = None,
+        output_stream: None | BinaryIO = None,
         stdout_as_string: bool = True,
-        kill_after_timeout: Union[None, float] = None,
+        kill_after_timeout: None | float = None,
         with_stdout: bool = True,
         universal_newlines: bool = False,
-        shell: Union[None, bool] = None,
-        env: Union[None, Mapping[str, str]] = None,
+        shell: None | bool = None,
+        env: None | Mapping[str, str] = None,
         max_chunk_size: int = io.DEFAULT_BUFFER_SIZE,
         strip_newline_in_stdout: bool = True,
         **subprocess_kwargs: Any,
-    ) -> Union[str, bytes, Tuple[int, Union[str, bytes], str], AutoInterrupt]:
+    ) -> str | bytes | tuple[int, str | bytes, str] | AutoInterrupt:
         R"""Handle executing the command, and consume and return the returned
         information (stdout).
 
@@ -1233,7 +1225,7 @@ class Git(metaclass=_GitMeta):
 
         # Allow the user to have the command executed in their working dir.
         try:
-            cwd = self._working_dir or os.getcwd()  # type: Union[None, str]
+            cwd: str | None = self._working_dir or os.getcwd()
             if not os.access(str(cwd), os.X_OK):
                 cwd = None
         except FileNotFoundError:
@@ -1297,8 +1289,8 @@ class Git(metaclass=_GitMeta):
             raise GitCommandNotFound(redacted_command, err) from err
         else:
             # Replace with a typeguard for Popen[bytes]?
-            proc.stdout = cast(BinaryIO, proc.stdout)
-            proc.stderr = cast(BinaryIO, proc.stderr)
+            proc.stdout = cast("BinaryIO", proc.stdout)
+            proc.stderr = cast("BinaryIO", proc.stderr)
 
         if as_process:
             return self.AutoInterrupt(proc, command)
@@ -1335,7 +1327,7 @@ class Git(metaclass=_GitMeta):
                     pass
                 return
 
-            def communicate() -> Tuple[AnyStr, AnyStr]:
+            def communicate() -> tuple[bytes | str, bytes | str]:
                 watchdog.start()
                 out, err = proc.communicate()
                 watchdog.cancel()
@@ -1357,8 +1349,8 @@ class Git(metaclass=_GitMeta):
 
         # Wait for the process to return.
         status = 0
-        stdout_value: Union[str, bytes] = b""
-        stderr_value: Union[str, bytes] = b""
+        stdout_value: str | bytes = b""
+        stderr_value: str | bytes = b""
         newline = "\n" if universal_newlines else b"\n"
         try:
             if output_stream is None:
@@ -1391,7 +1383,7 @@ class Git(metaclass=_GitMeta):
         if self.GIT_PYTHON_TRACE == "full":
             cmdstr = " ".join(redacted_command)
 
-            def as_text(stdout_value: Union[bytes, str]) -> str:
+            def as_text(stdout_value: bytes | str) -> str:
                 return not output_stream and safe_decode(stdout_value) or "<OUTPUT_STREAM>"
 
             # END as_text
@@ -1422,10 +1414,10 @@ class Git(metaclass=_GitMeta):
         else:
             return stdout_value
 
-    def environment(self) -> Dict[str, str]:
+    def environment(self) -> dict[str, str]:
         return self._environment
 
-    def update_environment(self, **kwargs: Any) -> Dict[str, Union[str, None]]:
+    def update_environment(self, **kwargs: Any) -> dict[str, str | None]:
         """Set environment variables for future git invocations. Return all changed
         values in a format that can be passed back into this function to revert the
         changes.
@@ -1472,7 +1464,7 @@ class Git(metaclass=_GitMeta):
         finally:
             self.update_environment(**old_env)
 
-    def transform_kwarg(self, name: str, value: Any, split_single_char_options: bool) -> List[str]:
+    def transform_kwarg(self, name: str, value: Any, split_single_char_options: bool) -> list[str]:
         if len(name) == 1:
             if value is True:
                 return ["-%s" % name]
@@ -1488,7 +1480,7 @@ class Git(metaclass=_GitMeta):
                 return ["--%s=%s" % (dashify(name), value)]
         return []
 
-    def transform_kwargs(self, split_single_char_options: bool = True, **kwargs: Any) -> List[str]:
+    def transform_kwargs(self, split_single_char_options: bool = True, **kwargs: Any) -> list[str]:
         """Transform Python-style kwargs into git command line options."""
         args = []
         for k, v in kwargs.items():
@@ -1500,7 +1492,7 @@ class Git(metaclass=_GitMeta):
         return args
 
     @classmethod
-    def _unpack_args(cls, arg_list: Sequence[str]) -> List[str]:
+    def _unpack_args(cls, arg_list: Sequence[str]) -> list[str]:
         outlist = []
         if isinstance(arg_list, (list, tuple)):
             for arg in arg_list:
@@ -1510,7 +1502,7 @@ class Git(metaclass=_GitMeta):
 
         return outlist
 
-    def __call__(self, **kwargs: Any) -> "Git":
+    def __call__(self, **kwargs: Any) -> Git:
         """Specify command line options to the git executable for a subcommand call.
 
         :param kwargs:
@@ -1538,16 +1530,16 @@ class Git(metaclass=_GitMeta):
         as_process: Literal[True],
         *args: Any,
         **kwargs: Any,
-    ) -> "Git.AutoInterrupt": ...
+    ) -> Git.AutoInterrupt: ...
 
     @overload
     def _call_process(
         self, method: str, *args: Any, **kwargs: Any
-    ) -> Union[str, bytes, Tuple[int, Union[str, bytes], str], "Git.AutoInterrupt"]: ...
+    ) -> str | bytes | tuple[int, str | bytes, str] | Git.AutoInterrupt: ...
 
     def _call_process(
         self, method: str, *args: Any, **kwargs: Any
-    ) -> Union[str, bytes, Tuple[int, Union[str, bytes], str], "Git.AutoInterrupt"]:
+    ) -> str | bytes | tuple[int, str | bytes, str] | Git.AutoInterrupt:
         """Run the given git command with the specified arguments and return the result
         as a string.
 
@@ -1623,7 +1615,7 @@ class Git(metaclass=_GitMeta):
 
         return self.execute(call, **exec_kwargs)
 
-    def _parse_object_header(self, header_line: str) -> Tuple[str, str, int]:
+    def _parse_object_header(self, header_line: str) -> tuple[str, str, int]:
         """
         :param header_line:
             A line of the form::
@@ -1654,7 +1646,7 @@ class Git(metaclass=_GitMeta):
             raise ValueError("Failed to parse header: %r" % header_line)
         return (tokens[0], tokens[1], int(tokens[2]))
 
-    def _prepare_ref(self, ref: AnyStr) -> bytes:
+    def _prepare_ref(self, ref: bytes | str) -> bytes:
         # Required for command to separate refs on stdin, as bytes.
         if isinstance(ref, bytes):
             # Assume 40 bytes hexsha - bin-to-ascii for some reason returns bytes, not text.
@@ -1668,7 +1660,7 @@ class Git(metaclass=_GitMeta):
             refstr += "\n"
         return refstr.encode(defenc)
 
-    def _get_persistent_cmd(self, attr_name: str, cmd_name: str, *args: Any, **kwargs: Any) -> "Git.AutoInterrupt":
+    def _get_persistent_cmd(self, attr_name: str, cmd_name: str, *args: Any, **kwargs: Any) -> Git.AutoInterrupt:
         cur_val = getattr(self, attr_name)
         if cur_val is not None:
             return cur_val
@@ -1681,7 +1673,7 @@ class Git(metaclass=_GitMeta):
         cmd = cast("Git.AutoInterrupt", cmd)
         return cmd
 
-    def __get_object_header(self, cmd: "Git.AutoInterrupt", ref: AnyStr) -> Tuple[str, str, int]:
+    def __get_object_header(self, cmd: Git.AutoInterrupt, ref: bytes | str) -> tuple[str, str, int]:
         if cmd.stdin and cmd.stdout:
             cmd.stdin.write(self._prepare_ref(ref))
             cmd.stdin.flush()
@@ -1689,7 +1681,7 @@ class Git(metaclass=_GitMeta):
         else:
             raise ValueError("cmd stdin was empty")
 
-    def get_object_header(self, ref: str) -> Tuple[str, str, int]:
+    def get_object_header(self, ref: str) -> tuple[str, str, int]:
         """Use this method to quickly examine the type and size of the object behind the
         given ref.
 
@@ -1703,7 +1695,7 @@ class Git(metaclass=_GitMeta):
         cmd = self._get_persistent_cmd("cat_file_header", "cat_file", batch_check=True)
         return self.__get_object_header(cmd, ref)
 
-    def get_object_data(self, ref: str) -> Tuple[str, str, int, bytes]:
+    def get_object_data(self, ref: str) -> tuple[str, str, int, bytes]:
         """Similar to :meth:`get_object_header`, but returns object data as well.
 
         :return:
@@ -1717,7 +1709,7 @@ class Git(metaclass=_GitMeta):
         del stream
         return (hexsha, typename, size, data)
 
-    def stream_object_data(self, ref: str) -> Tuple[str, str, int, "Git.CatFileContentStream"]:
+    def stream_object_data(self, ref: str) -> tuple[str, str, int, Git.CatFileContentStream]:
         """Similar to :meth:`get_object_data`, but returns the data as a stream.
 
         :return:
@@ -1732,7 +1724,7 @@ class Git(metaclass=_GitMeta):
         cmd_stdout = cmd.stdout if cmd.stdout is not None else io.BytesIO()
         return (hexsha, typename, size, self.CatFileContentStream(size, cmd_stdout))
 
-    def clear_cache(self) -> "Git":
+    def clear_cache(self) -> Git:
         """Clear all kinds of internal caches to release resources.
 
         Currently persistent commands will be interrupted.
